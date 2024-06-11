@@ -30,13 +30,15 @@ st.markdown("---")
 # Session State
 # ----------------------------------------------------------------------------------------------------
 if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-3.5-turbo"
+    st.session_state["openai_model"] = "gpt-4o"
     
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": pos_prompt},
-    ]
+        {"role": "assistant", "content": "안녕 나는 너의 토론 파트너야 만나서 반가워!"}
+        ]
+       
     
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
