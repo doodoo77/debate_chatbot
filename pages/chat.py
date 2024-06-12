@@ -1,7 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 
-from prompts import pos_prompt, neg_prompt
+from prompts import pos_prompt
 
 
 client = OpenAI(
@@ -36,7 +36,7 @@ if "openai_model" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": pos_prompt},
-        {"role": "assistant", "content": "안녕 나는 너의 토론 파트너야 만나서 반가워!"}
+        {"role": "assistant", "content": "안녕하세요. 저는 오늘 당신과 토론을 진행할 토론 파트너입니다. 만나서 반가워요."}
         ]
        
     
@@ -74,9 +74,7 @@ if user_input := st.chat_input("여기에 입력 관련 설명 가능"):
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})    
         
-    # Check
-    if "종료" in response:
-        st.session_state.messages.append({"role": "system", "content": neg_prompt})
+
         
     
         
