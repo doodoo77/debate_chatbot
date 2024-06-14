@@ -14,12 +14,11 @@ client = OpenAI(
 # ----------------------------------------------------------------------------------------------------
 st.set_page_config(page_title = "토론챗봇")
 
-title = "3) 인공지능이 평가한 본인의 비판적사고 스킬 점수"
+title = "인공지능이 평가한 비판적사고 스킬 점수"
 st.markdown(
         f"""<h2 style='text-align: left; color: black; font-size: 1.7rem; font-family: 'Roboto''>{title}</h2>
         """, unsafe_allow_html=True)
 
-st.write("여기에 설명 가능")
 
 # ----------------------------------------------------------------------------------------------------
 # Conversation history
