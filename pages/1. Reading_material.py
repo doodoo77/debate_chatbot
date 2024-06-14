@@ -34,7 +34,7 @@ with st.container(border=True):
     st.link_button("기사 3 읽기", "https://www.kmib.co.kr/article/view.asp?arcid=0015339306")
     
     if st.button("챗봇과 토론하기", type="primary"):
-        st.switch_page("pages/2. Interact_with_chatbot.py ")
+        st.switch_page("pages/2. Interact_with_chatbot.py")
    
     ph = st.empty()
     N = 630
