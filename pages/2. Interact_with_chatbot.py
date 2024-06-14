@@ -14,16 +14,16 @@ client = OpenAI(
 # ----------------------------------------------------------------------------------------------------
 st.set_page_config(page_title = "토론챗봇")
 
-st.title("여기에 제목")
+title = "2) 챗봇과 토론하기"
+st.markdown(
+        f"""<h2 style='text-align: left; color: black; font-size: 1.7rem; font-family: 'Roboto''>{title}</h2>
+        """, unsafe_allow_html=True)
 
 st.write("여기에 설명 가능")
 
-st.link_button("기사 1 읽기", "http://www.iconsumer.or.kr/news/articleView.html?idxno=25078")
-st.link_button("기사 2 읽기", "https://link.springer.com/article/10.1007/s40593-022-00318-x#Sec3")
+if st.button("평가하기", type="primary"):
+    st.switch_page("pages/3. Evaluation.py ")
 
-if st.button("평가 결과 보기", type="primary"):
-    st.switch_page("pages/evaluation.py")
-    
 st.markdown("---")
 
 # ----------------------------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ for message in st.session_state.messages:
 # ----------------------------------------------------------------------------------------------------
 # Chat
 # ----------------------------------------------------------------------------------------------------
-if user_input := st.chat_input("여기에 입력 관련 설명 가능"):
+if user_input := st.chat_input(""):
     
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": user_input})
