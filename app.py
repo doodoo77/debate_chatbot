@@ -64,6 +64,6 @@ if user_input := st.chat_input(""):
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
                 
-    if "토론이 종료되었어." in response:
+    if "토론이 종료되었어." or "10초" in response:
         time.sleep(10)
         st.switch_page("pages/Evaluation.py")
