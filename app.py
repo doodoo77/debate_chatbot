@@ -10,6 +10,19 @@ import time
 
 st.set_page_config(page_title = "토론 챗봇")
 
+title = "챗봇과 토론 연습을 해보자"
+# description = "토론주제에 대해서 챗봇과 토론 연습을 해보자"
+
+fpath = os.path.join(os.getcwd(), "./NanumGothic-ExtraBold.ttf")
+prop= fm.FontProperties(fname=fpath)
+
+with st.container(border=True):
+    st.markdown(
+        f"""<h2 style='text-align: center; color: black; font-size: 1.7rem; fontpropertise: prop'>{title}</h2>""", unsafe_allow_html=True)
+        
+    st.image('img.PNG')
+
+
 client = OpenAI(
     api_key=st.secrets['OPENAI_API_KEY'], 
     organization=st.secrets['OPENAI_ORGANIZATION']
@@ -64,6 +77,6 @@ if user_input := st.chat_input(""):
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
                 
-    if "토론이 종료되었어." or "10초" in response:
+    if "토론이 종료되었어" or "최두성천재" in response:
         time.sleep(10)
         st.switch_page("pages/Evaluation.py")
