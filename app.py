@@ -8,9 +8,9 @@ import time
 # Page Config
 # ----------------------------------------------------------------------------------------------------
 
-st.set_page_config(page_title = "토론 챗봇")
+st.set_page_config(page_title = "AI 토론 튜터")
 
-title = "챗봇과 토론 연습을 해보자"
+title = "AI 토론 튜터와 토론 연습을 해보자"
 # description = "토론주제에 대해서 챗봇과 토론 연습을 해보자"
 
 fpath = os.path.join(os.getcwd(), "./NanumGothic-ExtraBold.ttf")
