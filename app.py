@@ -31,7 +31,7 @@ client = OpenAI(
 # Session State
 # ----------------------------------------------------------------------------------------------------
 if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-4o-mini"
+    st.session_state["openai_model"] = "gpt-4o"
     
 # Initialize chat history
 if "messages" not in st.session_state:
