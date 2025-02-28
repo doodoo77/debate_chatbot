@@ -12,13 +12,13 @@ client = OpenAI(
 # ----------------------------------------------------------------------------------------------------
 # Page Config
 # ----------------------------------------------------------------------------------------------------
-st.set_page_config(page_title = "토론챗봇")
+st.set_page_config(page_title="AI 토론 튜터")
 
-title = "인공지능이 평가한 비판적사고 스킬 점수"
+title = " AI 토론 튜터가 평가한 비판적사고 스킬 점수"
 st.markdown(
-        f"""<h2 style='text-align: left; color: black; font-size: 1.7rem; font-family: 'Roboto''>{title}</h2>
-        """, unsafe_allow_html=True)
-
+    f"""<h2 style='text-align: left; color: black; font-size: 1.7rem; font-family: 'Roboto''>{title}</h2>
+    """, unsafe_allow_html=True
+)
 
 # ----------------------------------------------------------------------------------------------------
 # Conversation history
@@ -31,12 +31,13 @@ else:
 
 conversation_text = ""
 with st.expander("대화 내역 보기"):
-    # Display chat messages from history on app rerun
-    for message in conversation[1:]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-        conversation_text += str(message["role"]) + ": " + str(message["content"]) + "\n"
-                       
+    # Display chat messages from history on app rerun, excluding system messages
+    for message in conversation:
+        if message["role"] != "system":
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+            conversation_text += str(message["role"]) + ": " + str(message["content"]) + "\n"
+
 # ----------------------------------------------------------------------------------------------------
 # Evaluation
 # ----------------------------------------------------------------------------------------------------
