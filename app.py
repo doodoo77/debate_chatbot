@@ -21,7 +21,7 @@ with st.container(border=True):
     st.markdown(
         f"""<h2 style='text-align: center; color: black; font-size: 1.7rem; fontpropertise: prop'>{title}</h2>""", unsafe_allow_html=True)
         
-    st.image('img.PNG')
+    st.image('img2.PNG')
 
 
 client = OpenAI(

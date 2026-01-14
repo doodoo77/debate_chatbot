@@ -1,0 +1,8 @@
+conda create -n debate python=3.11
+conda activate debate
+
+conda install conda-forge::streamlit
+conda install conda-forge::openai
+conda install conda-forge::matplotlib
+conda install conda-forge::langchain
+
