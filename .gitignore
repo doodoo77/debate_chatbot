@@ -1,0 +1,26 @@
+.streamlit/secrets.toml
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+MA/
+
+# Local database / cache
+.db/
+db/
+*.sqlite3
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Optional local assets
+DATA_vertorDB/
