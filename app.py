@@ -39,14 +39,12 @@ def detect_stance_only_reply(text: str) -> str | None:
     return None
 
 
-
 def build_stance_fast_response(stance: str) -> str:
     if stance == "pro":
         return "좋아, 그럼 찬성 입장에서 생각해보자. 먼저 첫 번째 근거를 말해볼래?"
     if stance == "con":
         return "좋아, 그럼 반대 입장에서 생각해보자. 먼저 첫 번째 근거를 말해볼래?"
     return "좋아, 먼저 찬성과 반대 중 네 입장을 분명하게 말해볼래?"
-
 
 
 def apply_stance_fast_state(dialogue_state: Dict[str, Any], stance: str) -> Dict[str, Any]:
@@ -56,13 +54,13 @@ def apply_stance_fast_state(dialogue_state: Dict[str, Any], stance: str) -> Dict
             "student_stance": stance,
             "turn_state": "awaiting_argument_1",
             "arguments_collected": 0,
-            "rebuttal_intro_sent": False,
-            "rebuttal_round": 0,
-            "rebuttal_set": 0,
+            "phase1_intro_sent": False,
+            "phase2_intro_sent": False,
+            "phase1_round": 0,
+            "phase2_round": 0,
         }
     )
     return next_state
-
 
 
 def build_fast_path_trace(step_name: str, response: str, stance: str) -> Dict[str, Any]:
@@ -76,6 +74,7 @@ def build_fast_path_trace(step_name: str, response: str, stance: str) -> Dict[st
                 "output_tokens": 0,
                 "cost_usd": 0.0,
                 "status": "fast_path",
+                "model_name": "fast_path",
             }
         ],
         "planner": {
@@ -195,11 +194,60 @@ def compact_metrics_table(metrics: List[Dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def classify_agent_name(step: str) -> str:
+    if step == "planner":
+        return "Planner"
+    if step == "initial_response":
+        return "Draft Generator"
+    if step == "draft_compatibility":
+        return "Verifier"
+    if step == "external_documents":
+        return "Search"
+    if step.startswith("grader"):
+        return "Verifier"
+    if step.startswith("rewrite"):
+        return "Executor"
+    if step == "memory_signal":
+        return "Memory"
+    if step == "cache_lookup":
+        return "Cache"
+    if step.startswith("fast_path"):
+        return "Fast Path"
+    return "System"
+
+
+def build_agent_timeline_table(trace: Dict[str, Any]) -> pd.DataFrame:
+    metrics = trace.get("metrics") or []
+    rows = []
+
+    for idx, metric in enumerate(metrics, start=1):
+        step = metric.get("step", "-")
+        rows.append(
+            {
+                "순서": idx,
+                "에이전트": classify_agent_name(step),
+                "단계": step,
+                "시간(ms)": metric.get("duration_ms"),
+                "모델명": metric.get("model_name"),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
 with st.sidebar:
     trace = st.session_state.last_run_trace or {}
     metrics = trace.get("metrics") or []
     meta = st.session_state.last_run_meta or {}
     step_order = trace.get("step_order") or []
+
+    if metrics:
+        st.subheader("에이전트 호출 요약")
+        st.dataframe(
+            build_agent_timeline_table(trace),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     st.subheader("디버그 요약")
     st.write(f"현재 단계: {st.session_state.previous_phase}")

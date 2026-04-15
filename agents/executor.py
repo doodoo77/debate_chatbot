@@ -127,6 +127,8 @@ class ExecuteAgent:
         return plan.phase in {
             "counter_argument_round_1",
             "counter_argument_round_2",
+            "student_argument_round_1",
+            "student_argument_round_2",
             "student_rebuttal_round",
             "closing",
         }
@@ -139,24 +141,30 @@ class ExecuteAgent:
         return cleaned
 
     def _normalize_transition_phrase(self, candidate: str, plan: PlannerOutput) -> str:
-        phrase = "반론 및 재반론 연습을 시작해보자"
+        phase1_phrase = "자, 이제 반대 입장의 주장에 대한 반론 연습을 해보자."
+        phase2_phrase = "이제 네가 준비한 근거를 바탕으로 반론 및 재반론 연습을 해보자."
         normalized = candidate.strip()
-        if plan.phase != "counter_argument_round_1" or not plan.transition_to_rebuttal:
+
+        active_intro = None
+        if plan.transition_to_rebuttal and plan.phase == "counter_argument_round_1":
+            active_intro = phase1_phrase
+        elif plan.transition_to_rebuttal and plan.phase == "student_argument_round_1":
+            active_intro = phase2_phrase
+        else:
             return normalized
 
         paragraphs = [part.strip() for part in re.split(r"\n\s*\n", normalized) if part.strip()]
         kept: List[str] = []
         for paragraph in paragraphs:
             plain = self._strip_emphasis(paragraph)
-            if phrase in plain:
+            if phase1_phrase in plain or phase2_phrase in plain:
                 continue
             kept.append(paragraph)
 
         body = "\n\n".join(kept).strip()
-        intro = f"{phrase}."
         if body:
-            return f"{intro}\n\n{body}"
-        return intro
+            return f"{active_intro}\n\n{body}"
+        return active_intro
 
     @staticmethod
     def _format_search_results(results: Any) -> str:

@@ -10,8 +10,11 @@ PhaseType = Literal[
     "stance_selection",
     "collect_argument_1",
     "collect_argument_2",
+    "collect_argument_3",
     "counter_argument_round_1",
     "counter_argument_round_2",
+    "student_argument_round_1",
+    "student_argument_round_2",
     "student_rebuttal_round",
     "closing",
 ]

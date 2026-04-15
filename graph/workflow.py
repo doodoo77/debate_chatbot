@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from agents.executor import ExecuteAgent
 from agents.memory import MemoryAgent
 from agents.planner import PlannerAgent
+from config import get_settings
 from schemas.planner import PlannerOutput
 from services.cache import SemanticRedisCache
 from services.router import DynamicRouter
@@ -36,6 +37,7 @@ class DebateState(TypedDict, total=False):
 
 class DebateChatbotRuntime:
     def __init__(self) -> None:
+        self.settings = get_settings()
         self.router = DynamicRouter()
         self.planner = PlannerAgent()
         self.executor = ExecuteAgent()
@@ -48,9 +50,10 @@ class DebateChatbotRuntime:
         return {
             "turn_state": "awaiting_stance",
             "arguments_collected": 0,
-            "rebuttal_intro_sent": False,
-            "rebuttal_round": 0,
-            "rebuttal_set": 0,
+            "phase1_intro_sent": False,
+            "phase2_intro_sent": False,
+            "phase1_round": 0,
+            "phase2_round": 0,
             "student_stance": "unknown",
         }
 
@@ -92,8 +95,8 @@ class DebateChatbotRuntime:
             "phase": plan.phase,
             "turn_state": dialogue_state.get("turn_state"),
             "arguments_collected": dialogue_state.get("arguments_collected"),
-            "rebuttal_round": dialogue_state.get("rebuttal_round"),
-            "rebuttal_set": dialogue_state.get("rebuttal_set"),
+            "phase1_round": dialogue_state.get("phase1_round"),
+            "phase2_round": dialogue_state.get("phase2_round"),
             "student_stance": plan.student_stance,
         }
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -128,6 +131,34 @@ class DebateChatbotRuntime:
         next_state["student_stance"] = plan.student_stance
 
         turn_state = current.get("turn_state", "awaiting_stance")
+
+        def ordinal(index: int) -> str:
+            return {1: "첫 번째", 2: "두 번째", 3: "세 번째"}.get(index, f"{index}번째")
+
+        def build_collect_target(index: int) -> str:
+            label = ordinal(index)
+            if plan.requires_specificity and plan.requires_example:
+                return (
+                    f"학생의 {label} 근거 방향을 짧게 인정한 뒤, "
+                    "챗봇이 예시를 대신 설명하지 말고 학생이 직접 왜 그런지와 실제 사례를 말하도록 질문 1개를 한다. "
+                    "마지막 문장은 반드시 질문형으로 끝낸다."
+                )
+            if plan.requires_specificity:
+                return (
+                    f"학생의 {label} 근거 방향을 짧게 인정한 뒤, "
+                    "왜 그런지 학생이 직접 더 구체적으로 설명하도록 질문 1개를 한다. "
+                    "챗봇이 이유를 대신 완성하지 말고 마지막 문장은 반드시 질문형으로 끝낸다."
+                )
+            if plan.requires_example:
+                return (
+                    f"학생의 {label} 근거 방향을 짧게 인정한 뒤, "
+                    "챗봇이 예시를 대신 제시하지 말고 학생이 직접 실제 사례를 말하도록 질문 1개를 한다. "
+                    "예를 들면 어떤 상황에서 그런지 학생에게 물어보고 마지막 문장은 반드시 질문형으로 끝낸다."
+                )
+            return (
+                f"학생의 {label} 근거를 더 분명하게 말하도록 질문 1개를 한다. "
+                "설명으로 끝내지 말고 마지막 문장은 반드시 질문형으로 끝낸다."
+            )
 
         if turn_state == "awaiting_stance":
             if plan.student_stance == "unknown":
@@ -172,37 +203,12 @@ class DebateChatbotRuntime:
                 )
 
             next_state["arguments_collected"] = max(0, min(inferred_arguments, 1))
-
-            if plan.requires_specificity and plan.requires_example:
-                target_action = (
-                    "학생의 첫 번째 근거 방향을 짧게 인정한 뒤, "
-                    "챗봇이 예시를 대신 설명하지 말고 학생이 직접 왜 그런지와 실제 사례를 말하도록 질문 1개를 한다. "
-                    "마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-            elif plan.requires_specificity:
-                target_action = (
-                    "학생의 첫 번째 근거 방향을 짧게 인정한 뒤, "
-                    "왜 그런지 학생이 직접 더 구체적으로 설명하도록 질문 1개를 한다. "
-                    "챗봇이 이유를 대신 완성하지 말고 마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-            elif plan.requires_example:
-                target_action = (
-                    "학생의 첫 번째 근거 방향을 짧게 인정한 뒤, "
-                    "챗봇이 예시를 대신 제시하지 말고 학생이 직접 실제 사례를 말하도록 질문 1개를 한다. "
-                    "예를 들면 어떤 상황에서 그런지 학생에게 물어보고 마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-            else:
-                target_action = (
-                    "학생의 첫 번째 근거를 더 분명하게 말하도록 질문 1개를 한다. "
-                    "설명으로 끝내지 말고 마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-
             return (
                 self._plan_with_updates(
                     plan,
                     phase="collect_argument_1",
                     completed_argument_count=next_state["arguments_collected"],
-                    target_action=target_action,
+                    target_action=build_collect_target(1),
                     transition_to_rebuttal=False,
                     should_end=False,
                 ),
@@ -211,23 +217,50 @@ class DebateChatbotRuntime:
 
         if turn_state == "awaiting_argument_2":
             if inferred_arguments >= 2 and not plan.requires_specificity and not plan.requires_example:
+                next_state.update({"turn_state": "awaiting_argument_3", "arguments_collected": 2})
+                return (
+                    self._plan_with_updates(
+                        plan,
+                        phase="collect_argument_3",
+                        completed_argument_count=2,
+                        target_action="두 번째 근거를 짧게 인정하고, 세 번째 근거를 하나만 더 말해보게 한다.",
+                        transition_to_rebuttal=False,
+                        should_end=False,
+                    ),
+                    next_state,
+                )
+
+            next_state["arguments_collected"] = max(1, min(inferred_arguments, 2))
+            return (
+                self._plan_with_updates(
+                    plan,
+                    phase="collect_argument_2",
+                    completed_argument_count=next_state["arguments_collected"],
+                    target_action=build_collect_target(2),
+                    transition_to_rebuttal=False,
+                    should_end=False,
+                ),
+                next_state,
+            )
+
+        if turn_state == "awaiting_argument_3":
+            if inferred_arguments >= 3 and not plan.requires_specificity and not plan.requires_example:
                 next_state.update(
                     {
-                        "turn_state": "awaiting_student_rebuttal_after_counter_1",
-                        "arguments_collected": 2,
-                        "rebuttal_intro_sent": True,
-                        "rebuttal_round": 1,
-                        "rebuttal_set": 1,
+                        "turn_state": "phase1_wait_student_after_counter",
+                        "arguments_collected": 3,
+                        "phase1_intro_sent": True,
+                        "phase1_round": 1,
                     }
                 )
                 return (
                     self._plan_with_updates(
                         plan,
                         phase="counter_argument_round_1",
-                        completed_argument_count=2,
+                        completed_argument_count=3,
                         target_action=(
-                            '정확히 "반론 및 재반론 연습을 시작해보자"를 이번 턴에 한 번만 포함하고, '
-                            "학생이 제시한 첫 번째 근거를 겨냥해 반대 입장의 핵심 반론 1개를 제시한 뒤 학생의 반론을 요청한다."
+                            '정확히 "자, 이제 반대 입장의 주장에 대한 반론 연습을 해보자."라는 전환 문장을 이번 턴에 한 번만 포함하고, '
+                            "학생과 반대 입장에서 새로운 근거 1개를 제시한 뒤 학생의 반론을 요청한다."
                         ),
                         transition_to_rebuttal=True,
                         should_end=False,
@@ -235,101 +268,155 @@ class DebateChatbotRuntime:
                     next_state,
                 )
 
-            next_state["arguments_collected"] = max(1, min(inferred_arguments, 2))
-
-            if plan.requires_specificity and plan.requires_example:
-                target_action = (
-                    "학생의 두 번째 근거 방향을 짧게 인정한 뒤, "
-                    "챗봇이 예시를 대신 설명하지 말고 학생이 직접 왜 그런지와 실제 사례를 말하도록 질문 1개를 한다. "
-                    "마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-            elif plan.requires_specificity:
-                target_action = (
-                    "학생의 두 번째 근거 방향을 짧게 인정한 뒤, "
-                    "왜 그런지 학생이 직접 더 구체적으로 설명하도록 질문 1개를 한다. "
-                    "챗봇이 이유를 대신 완성하지 말고 마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-            elif plan.requires_example:
-                target_action = (
-                    "학생의 두 번째 근거 방향을 짧게 인정한 뒤, "
-                    "챗봇이 예시를 대신 제시하지 말고 학생이 직접 실제 사례를 말하도록 질문 1개를 한다. "
-                    "예를 들면 어떤 상황에서 그런지 학생에게 물어보고 마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-            else:
-                target_action = (
-                    "학생의 두 번째 근거를 더 분명하게 말하도록 질문 1개를 한다. "
-                    "설명으로 끝내지 말고 마지막 문장은 반드시 질문형으로 끝낸다."
-                )
-
+            next_state["arguments_collected"] = max(2, min(inferred_arguments, 3))
             return (
                 self._plan_with_updates(
                     plan,
-                    phase="collect_argument_2",
+                    phase="collect_argument_3",
                     completed_argument_count=next_state["arguments_collected"],
-                    target_action=target_action,
+                    target_action=build_collect_target(3),
                     transition_to_rebuttal=False,
                     should_end=False,
                 ),
                 next_state,
             )
 
-        if turn_state == "awaiting_student_rebuttal_after_counter_1":
-            rebuttal_set = int(current.get("rebuttal_set", 1) or 1)
+        if turn_state == "phase1_wait_student_after_counter":
+            round_index = int(current.get("phase1_round", 1) or 1)
             next_state.update(
                 {
-                    "turn_state": "awaiting_student_rebuttal_after_counter_2",
-                    "arguments_collected": 2,
-                    "rebuttal_round": 2 if rebuttal_set == 1 else 4,
-                    "rebuttal_set": rebuttal_set,
+                    "turn_state": "phase1_wait_student_after_recounter",
+                    "arguments_collected": 3,
+                    "phase1_round": round_index,
                 }
-            )
-            target_action = (
-                "학생의 첫 번째 근거에 대한 학생 반론을 짧게 인정한 뒤, 챗봇의 재반론 1개를 제시하고 다시 학생의 답변을 요청한다."
-                if rebuttal_set == 1
-                else "학생의 두 번째 근거에 대한 학생 반론을 짧게 인정한 뒤, 챗봇의 재반론 1개를 제시하고 다시 학생의 답변을 요청한다."
             )
             return (
                 self._plan_with_updates(
                     plan,
                     phase="counter_argument_round_2",
-                    completed_argument_count=2,
-                    target_action=target_action,
+                    completed_argument_count=3,
+                    target_action=(
+                        f"반론 연습 1단계 {round_index}회차에서 학생 반론을 짧게 인정한 뒤, "
+                        "챗봇의 재반론 1개를 제시하고 다시 학생의 답변을 요청한다."
+                    ),
                     transition_to_rebuttal=False,
                     should_end=False,
                 ),
                 next_state,
             )
 
-        if turn_state == "awaiting_student_rebuttal_after_counter_2":
-            rebuttal_set = int(current.get("rebuttal_set", 1) or 1)
-            if rebuttal_set == 1:
+        if turn_state == "phase1_wait_student_after_recounter":
+            round_index = int(current.get("phase1_round", 1) or 1)
+            if round_index < 3:
+                next_round = round_index + 1
                 next_state.update(
                     {
-                        "turn_state": "awaiting_student_rebuttal_after_counter_1",
-                        "arguments_collected": 2,
-                        "rebuttal_round": 3,
-                        "rebuttal_set": 2,
+                        "turn_state": "phase1_wait_student_after_counter",
+                        "arguments_collected": 3,
+                        "phase1_round": next_round,
                     }
                 )
                 return (
                     self._plan_with_updates(
                         plan,
                         phase="counter_argument_round_1",
-                        completed_argument_count=2,
-                        target_action="이제 학생이 제시한 두 번째 근거에 대해, 새로운 반론을 시작한다는 점이 분명히 드러나도록 두 번째 근거를 먼저 명시한 뒤 반대 입장의 핵심 반론 1개를 제시하고 학생의 반론을 요청한다.",
+                        completed_argument_count=3,
+                        target_action=(
+                            f"반론 연습 1단계 {next_round}회차로 넘어간다. "
+                            "이전 회차를 길게 반복하지 말고 학생과 반대 입장에서 새로운 근거 1개를 제시한 뒤 학생의 반론을 요청한다."
+                        ),
                         transition_to_rebuttal=False,
                         should_end=False,
                     ),
                     next_state,
                 )
 
-            next_state.update({"turn_state": "completed", "arguments_collected": 2, "rebuttal_round": 4, "rebuttal_set": 2})
+            next_state.update(
+                {
+                    "turn_state": "phase2_wait_student_after_counter",
+                    "arguments_collected": 3,
+                    "phase2_intro_sent": True,
+                    "phase2_round": 1,
+                }
+            )
+            return (
+                self._plan_with_updates(
+                    plan,
+                    phase="student_argument_round_1",
+                    completed_argument_count=3,
+                    target_action=(
+                        '정확히 "이제 네가 준비한 근거를 바탕으로 반론 및 재반론 연습을 해보자."라는 전환 문장을 이번 턴에 한 번만 포함하고, '
+                        "학생의 첫 번째 근거를 먼저 짚은 뒤 그 근거에 대한 반론 1개를 제시하고 학생의 재반론을 요청한다."
+                    ),
+                    transition_to_rebuttal=True,
+                    should_end=False,
+                ),
+                next_state,
+            )
+
+        if turn_state == "phase2_wait_student_after_counter":
+            round_index = int(current.get("phase2_round", 1) or 1)
+            next_state.update(
+                {
+                    "turn_state": "phase2_wait_student_after_recounter",
+                    "arguments_collected": 3,
+                    "phase2_round": round_index,
+                }
+            )
+            return (
+                self._plan_with_updates(
+                    plan,
+                    phase="student_argument_round_2",
+                    completed_argument_count=3,
+                    target_action=(
+                        f"학생의 {ordinal(round_index)} 근거에 대한 학생 재반론을 짧게 인정한 뒤, "
+                        "챗봇의 재반론 1개를 제시하고 다시 학생의 답변을 요청한다."
+                    ),
+                    transition_to_rebuttal=False,
+                    should_end=False,
+                ),
+                next_state,
+            )
+
+        if turn_state == "phase2_wait_student_after_recounter":
+            round_index = int(current.get("phase2_round", 1) or 1)
+            if round_index < 3:
+                next_round = round_index + 1
+                next_state.update(
+                    {
+                        "turn_state": "phase2_wait_student_after_counter",
+                        "arguments_collected": 3,
+                        "phase2_round": next_round,
+                    }
+                )
+                return (
+                    self._plan_with_updates(
+                        plan,
+                        phase="student_argument_round_1",
+                        completed_argument_count=3,
+                        target_action=(
+                            f"이제 학생의 {ordinal(next_round)} 근거에 대한 새로운 반론을 시작한다는 점이 분명히 드러나도록, "
+                            "그 근거를 먼저 짚고 반론 1개를 제시한 뒤 학생의 재반론을 요청한다."
+                        ),
+                        transition_to_rebuttal=False,
+                        should_end=False,
+                    ),
+                    next_state,
+                )
+
+            next_state.update(
+                {
+                    "turn_state": "completed",
+                    "arguments_collected": 3,
+                    "phase2_round": 3,
+                }
+            )
             return (
                 self._plan_with_updates(
                     plan,
                     phase="closing",
-                    completed_argument_count=2,
-                    target_action="학생의 마지막 재반론을 짧게 정리하고, 잘한 점 1개와 보완점 1개를 말하며 이번 연습을 마무리한다.",
+                    completed_argument_count=3,
+                    target_action="학생의 마지막 재반론을 짧게 정리하고, 전체 흐름 한 줄 요약과 잘한 점 1개, 보완점 1개를 말하며 이번 연습을 마무리한다.",
                     transition_to_rebuttal=False,
                     should_end=True,
                 ),
@@ -340,7 +427,7 @@ class DebateChatbotRuntime:
             self._plan_with_updates(
                 plan,
                 phase="closing",
-                completed_argument_count=max(2, inferred_arguments),
+                completed_argument_count=max(3, inferred_arguments),
                 should_end=True,
             ),
             next_state,
@@ -356,6 +443,7 @@ class DebateChatbotRuntime:
         memory_summary = state.get("memory_summary", "")
         previous_phase = state.get("previous_phase", "")
         dialogue_state = state.get("dialogue_state") or self.default_dialogue_state()
+
         user_text = self._last_user_text(messages)
         routing = self.router.route(user_text=user_text, conversation_turns=len(messages))
 
@@ -426,9 +514,32 @@ class DebateChatbotRuntime:
         }
 
     def cache_lookup(self, state: DebateState) -> DebateState:
+        trace = dict(state.get("turn_trace", {}))
+
+        if not self.settings.enable_cache:
+            cache_metric = build_metric(
+                step="cache_lookup",
+                started_at=now(),
+                model_name="-",
+                input_payload="cache_disabled",
+                output_payload={"hit": False, "reason": "disabled"},
+                status="disabled",
+            )
+            trace = self._extend_trace(trace, step_name="cache_lookup(disabled)", metric=cache_metric)
+            trace["cache"] = {
+                "status": "disabled",
+                "similarity": None,
+                "response": "",
+                "metric": cache_metric,
+            }
+            return {
+                "cache_hit": None,
+                "used_cache": False,
+                "turn_trace": trace,
+            }
+
         user_text = self._last_user_text(state["messages"])
         planner = PlannerOutput(**state["planner"])
-        trace = dict(state.get("turn_trace", {}))
 
         cache_started = now()
         hit = self.cache.lookup(
@@ -563,7 +674,10 @@ class DebateChatbotRuntime:
                     "status": "skipped_external_grounding",
                     "text": "",
                     "metric": None,
-                    "compatibility": {"compatible": False, "reason": "외부 근거가 필요한 턴은 executor tool call에서만 검색합니다."},
+                    "compatibility": {
+                        "compatible": False,
+                        "reason": "외부 근거가 필요한 턴은 executor tool call에서만 검색합니다.",
+                    },
                     "compatibility_metric": None,
                 }
             )
@@ -622,18 +736,21 @@ class DebateChatbotRuntime:
         trace["final_response"] = execution_trace.get("final_response", response)
 
         search_context = search_trace.get("results", "")
-        self.cache.store(
-            user_text=user_text,
-            phase=typed_plan.phase,
-            topic=state["topic"],
-            scope=state.get("cache_scope", ""),
-            response=response,
-            metadata={
-                "routing": state["routing"],
-                "search_context": search_context,
-                "trace": trace,
-            },
-        )
+
+        if self.settings.enable_cache:
+            self.cache.store(
+                user_text=user_text,
+                phase=typed_plan.phase,
+                topic=state["topic"],
+                scope=state.get("cache_scope", ""),
+                response=response,
+                metadata={
+                    "routing": state["routing"],
+                    "search_context": search_context,
+                    "trace": trace,
+                },
+            )
+
         return {
             "response": response,
             "search_context": search_context,

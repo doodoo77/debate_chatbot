@@ -27,6 +27,7 @@ class Settings:
     max_verification_loops: int
     summary_token_threshold: int
     topic: str
+    enable_cache: bool
 
 
 DEFAULT_TOPIC = "알고리즘의 추천이 우리의 삶을 풍요롭게 해줄까?"
@@ -46,6 +47,12 @@ def _read_secret(name: str, default: Optional[Any] = None) -> Optional[Any]:
     return default
 
 
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings(
@@ -54,15 +61,12 @@ def get_settings() -> Settings:
         tavily_api_key=_read_secret("TAVILY_API_KEY"),
         redis_url=_read_secret("REDIS_URL", "redis://localhost:6379/0"),
 
-        # routed generation
         model_easy=_read_secret("MODEL_EASY", "gpt-5.4-mini"),
         model_hard=_read_secret("MODEL_HARD", "gpt-5.4"),
 
-        # agent-specific
         planner_model=_read_secret("PLANNER_MODEL", "gpt-5.4-mini"),
         verifier_model=_read_secret("VERIFIER_MODEL", "gpt-5.4-mini"),
 
-        # cache / similarity
         embedding_model=_read_secret("EMBEDDING_MODEL", "text-embedding-3-large"),
 
         cache_similarity_threshold=float(_read_secret("CACHE_SIMILARITY_THRESHOLD", 0.90)),
@@ -70,4 +74,7 @@ def get_settings() -> Settings:
         max_verification_loops=int(_read_secret("MAX_VERIFICATION_LOOPS", 2)),
         summary_token_threshold=int(_read_secret("SUMMARY_TOKEN_THRESHOLD", 900)),
         topic=_read_secret("DEBATE_TOPIC", DEFAULT_TOPIC),
+
+        # 잠깐 캐시를 꺼둘 거라 기본값을 false로 둠
+        enable_cache=_to_bool(_read_secret("ENABLE_CACHE", "false")),
     )
